@@ -1,21 +1,33 @@
 import { bot } from '#lib';
-import { upload, XSTRO } from '#utils';
+import {
+	audioToBlackVideo,
+	convertToMp3,
+	createSticker,
+	cropToCircle,
+	flipMedia,
+	toPTT,
+	toVideo,
+	upload,
+	webpToImage,
+	XSTRO
+} from '#utils';
 
 bot(
 	{
 		pattern: 'sticker',
 		public: true,
 		desc: 'Converts Images and Videos to Sticker',
-		type: 'converter',
+		type: 'converter'
 	},
 	async message => {
 		let media;
-		if (!message.reply_message || (!message.reply_message.image && !message.reply_message.video)) return message.send('_Reply with an Image or Video_');
+		if (!message.reply_message.image && !message.reply_message.video) {
+			return message.send('_Reply with an Image or Video_');
+		}
 		media = await message.download();
-		let url = await upload(media);
-		const sticker = await XSTRO.makeSticker(url.rawUrl);
-		return await message.send(sticker, { type: 'sticker' });
-	},
+		media = await createSticker(media);
+		return message.send(media, { type: 'sticker' });
+	}
 );
 
 bot(
@@ -23,16 +35,15 @@ bot(
 		pattern: 'take',
 		public: true,
 		desc: 'rebrands a sticker to bot',
-		type: 'converter',
+		type: 'converter'
 	},
 	async message => {
 		let media;
 		if (!message.reply_message.sticker) return message.send('_Reply a sticker only!_');
 		media = await message.download();
-		let url = await upload(media);
-		const sticker = await XSTRO.makeSticker(url.rawUrl);
-		return await message.send(sticker, { type: 'sticker' });
-	},
+		media = await createSticker(media);
+		return message.send(media, { type: 'sticker' });
+	}
 );
 
 bot(
@@ -40,21 +51,19 @@ bot(
 		pattern: 'flip',
 		public: true,
 		desc: 'Flip media left/right/vertical/horizontal',
-		type: 'converter',
+		type: 'converter'
 	},
-	async (message, match) => {
-		const { reply_message } = message;
-		if (!reply_message?.image && !reply_message?.video) return message.send('_Reply to an Image or Video_');
-
-		const validDirections = ['left', 'right', 'vertical', 'horizontal'];
-		if (!validDirections.includes(match)) return message.send(`_Usage: ${message.prefix}flip <${validDirections.join('/')}>`);
-
-		const media = await message.download();
-		const { rawUrl } = await upload(media);
-		const flipped = await XSTRO.flipMedia(rawUrl, match);
-
-		return message.send(flipped, { caption: '_Flipped successfully_' });
-	},
+	async (message, match, { prefix }) => {
+		let media;
+		if (!message.reply_message?.image && !message.reply_message?.video)
+			return message.send('_Reply to an Image or Video_');
+		if (!['left', 'right', 'vertical', 'horizontal'].includes(match)) {
+			return message.send(`_Usage: ${prefix}flip <${validDirections.join('/')}>`);
+		}
+		media = await message.download(true);
+		media = await flipMedia(media, match);
+		return message.send(media, { caption: `_Flipped to ${match}_` });
+	}
 );
 
 bot(
@@ -62,16 +71,15 @@ bot(
 		pattern: 'black',
 		public: true,
 		desc: 'Converts Audio to Black Video',
-		type: 'converter',
+		type: 'converter'
 	},
 	async message => {
 		let media;
 		if (!message.reply_message.audio) return message.send('_Reply Audio_');
-		media = await message.download();
-		const url = await upload(media);
-		const video = await XSTRO.blackvideo(url.rawUrl);
-		return await message.send(video);
-	},
+		media = await message.download(true);
+		media = await audioToBlackVideo(media);
+		return await message.send(media);
+	}
 );
 
 bot(
@@ -79,7 +87,7 @@ bot(
 		pattern: 'ttp',
 		public: true,
 		desc: 'Designs ttp Stickers',
-		type: 'converter',
+		type: 'converter'
 	},
 	async (message, match, { prefix }) => {
 		if (!match) return message.send(`_Usage: ${prefix}ttp Astro_`);
@@ -87,7 +95,7 @@ bot(
 		const { rawUrl } = await upload(buff);
 		const sticker = await XSTRO.makeSticker(rawUrl);
 		return await message.send(sticker, { type: 'sticker' });
-	},
+	}
 );
 
 bot(
@@ -95,14 +103,15 @@ bot(
 		pattern: 'photo',
 		public: true,
 		desc: 'Convert Sticker to Photo',
-		type: 'converter',
+		type: 'converter'
 	},
 	async message => {
+		let media;
 		if (!message.reply_message.sticker) return message.send('_Reply Sticker_');
-		const { rawUrl } = await upload(await message.download());
-		const img = await XSTRO.photo(rawUrl);
-		return await message.send(img);
-	},
+		media = await message.download(true);
+		media = await webpToImage(media);
+		return message.send(media);
+	}
 );
 
 bot(
@@ -110,12 +119,75 @@ bot(
 		pattern: 'mp3',
 		public: true,
 		desc: 'Convert Video to Audio',
-		type: 'converter',
+		type: 'converter'
 	},
 	async message => {
-		if (!message.reply_message.video) return message.send('_Reply Video_');
-		const { rawUrl } = await upload(await message.download());
-		const mp3 = await XSTRO.mp3(rawUrl);
-		return await message.send(mp3);
+		let media;
+		if (!message.reply_message.video && !message.reply_message.audio)
+			return message.send('_Reply Video or Audio_');
+		media = await message.download(true);
+		media = await convertToMp3(media);
+		return await message.send(media, {
+			mimetype: 'audio/mpeg',
+			ptt: false
+		});
+	}
+);
+
+bot(
+	{
+		pattern: 'ptt',
+		public: true,
+		desc: 'Convert Video to WhatsApp Opus',
+		type: 'converter'
 	},
+	async message => {
+		let media;
+		if (!message.reply_message.video && !message.reply_message.audio)
+			return message.send('_Reply Video or Audio_');
+		media = await message.download(true);
+		media = await toPTT(media);
+		return await message.client.sendMessage(message.jid, {
+			audio: media,
+			mimetype: 'audio/ogg; codecs=opus',
+			ptt: true
+		});
+	}
+);
+
+bot(
+	{
+		pattern: 'mp4',
+		public: true,
+		desc: 'Converts Video to playable WhatsApp Video',
+		type: 'converter'
+	},
+	async message => {
+		let media;
+		if (!message.reply_message.video && !message.reply_message.sticker)
+			return message.send('_Reply Video_');
+		media = await message.download(true);
+		media = await toVideo(media);
+		return await message.client.sendMessage(message.jid, {
+			video: media,
+			mimetype: 'video/mp4'
+		});
+	}
+);
+
+bot(
+	{
+		pattern: 'crop',
+		public: true,
+		desc: 'Converts Image or Sticker to Cropped Sticker',
+		type: 'converter'
+	},
+	async message => {
+		let media;
+		if (!message.reply_message.image && !message.reply_message.sticker)
+			return message.send('_Reply Sticker/Image_');
+		media = await message.download();
+		media = await cropToCircle(media);
+		return await message.send(media, { type: 'sticker' });
+	}
 );

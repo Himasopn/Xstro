@@ -1,4 +1,4 @@
-import config from '#config';
+import { config } from '#config';
 import { getBuffer, getJson } from 'xstro-utils';
 
 const { API_ID } = config;
@@ -27,14 +27,14 @@ const XSTRO = {
 			return {
 				title: data.title,
 				thumb: data.thumbnail,
-				url: data.url,
+				url: data.url
 			};
 		} else if (type.mp3) {
 			const res = await getJson(`${API_ID}/api/ytmp3?url=${url}`);
 			return {
 				title: res.title,
 				thumb: res.thumbnail,
-				url: res.link,
+				url: res.link
 			};
 		}
 	},
@@ -43,7 +43,7 @@ const XSTRO = {
 		const data = await getJson(res);
 		return {
 			title: data.title,
-			url: data.url,
+			url: data.url
 		};
 	},
 	chatbot: async text => {
@@ -109,36 +109,6 @@ const XSTRO = {
 		const res = await getJson(`${API_ID}/api/gitstalk?username=${username}`);
 		return res;
 	},
-	makeSticker: async (url, pack = config.STICKER_PACK.split(';')[0], author = config.STICKER_PACK.split(';')[1]) => {
-		return fetch(`${API_ID}/api/sticker?url=${encodeURIComponent(url)}&packname=${pack}&author=${author}`)
-			.then(response => {
-				if (!response.ok) {
-					throw new Error(`Failed to fetch sticker: ${response.statusText}`);
-				}
-				return response.arrayBuffer();
-			})
-			.then(buffer => Buffer.from(buffer))
-			.catch(error => {
-				console.error('Error creating sticker:', error.message);
-				throw error;
-			});
-	},
-	flipMedia: async (url, direction) => {
-		const res = await getBuffer(`${API_ID}/api/flip?url=${url}&direction=${direction}`);
-		return res;
-	},
-	blackvideo: async url => {
-		const res = await getBuffer(`${API_ID}/api/blackvideo?url=${url}`);
-		return res;
-	},
-	photo: async url => {
-		const res = await getBuffer(`${API_ID}/api/photo?url=${url}`);
-		return res;
-	},
-	mp3: async url => {
-		const res = await getBuffer(`${API_ID}/api/mp3?url=${url}`);
-		return res;
-	},
 	google: async query => {
 		const res = await getJson(`${API_ID}/api/google?query=${query}`);
 		return res.result;
@@ -188,9 +158,25 @@ const XSTRO = {
 		return res;
 	},
 	airquality: async (country, city) => {
-		const res = await getJson(`${API_ID}/api/airquality?country=${encodeURIComponent(country)}&city=${encodeURIComponent(city)}`);
+		const res = await getJson(
+			`${API_ID}/api/airquality?country=${encodeURIComponent(country)}&city=${encodeURIComponent(
+				city
+			)}`
+		);
 		return res;
 	},
+	forex: async symbol => {
+		try {
+			const currency = symbol.toUpperCase();
+			const res = await getJson(`${API_ID}/api/forex?symbol=${currency}`);
+			return res;
+		} catch {
+			return false;
+		}
+	},
+	wabeta: async () => {
+		return await getJson(`${API_ID}/api/wabeta`);
+	}
 };
 
 export { XSTRO };

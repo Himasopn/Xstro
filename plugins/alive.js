@@ -1,5 +1,5 @@
 import { bot } from '#lib';
-import config from '#config';
+import { config } from '#config';
 import { aliveMessage, setAliveMsg } from '#sql';
 
 bot(
@@ -7,7 +7,7 @@ bot(
 		pattern: 'alive',
 		public: true,
 		desc: 'Is Bot Alive?',
-		type: 'user',
+		type: 'user'
 	},
 	async (message, match) => {
 		if (match) {
@@ -19,9 +19,11 @@ bot(
 		const mentionData = {
 			mentions: [message.sender],
 			contextInfo: {
-				mentionedJid: [message.sender],
-			},
+				mentionedJid: [message.sender]
+			}
 		};
-		return botInfo ? message.send(botInfo, { ...mentionData, caption: msg }) : message.send(msg, mentionData);
-	},
+		return botInfo
+			? message.send(botInfo, { ...mentionData, caption: msg })
+			: message.send(msg, mentionData);
+	}
 );

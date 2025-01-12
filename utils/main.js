@@ -1,6 +1,10 @@
 import { performance } from 'perf_hooks';
-import { jidNormalizedUser } from 'baileys';
+import { promises as fs } from 'fs';
 import { join } from 'path';
+import { getContentType, jidNormalizedUser, normalizeMessageContent } from 'baileys';
+import { loadMessage } from '#sql';
+import { FileTypeFromBuffer, getBuffer } from 'xstro-utils';
+import { getConfigValues } from '#lib';
 
 export function manageProcess(type) {
 	if (type === 'restart') {
@@ -42,16 +46,20 @@ export const getRandom = array => {
 	return array[randomIndex];
 };
 
-export const numtoId = phoneNumber => {
-	if (!phoneNumber || typeof phoneNumber !== 'string') phoneNumber = phoneNumber.toString();
-	return jidNormalizedUser(`${phoneNumber.replace(/\D/g, '')}@s.whatsapp.net`);
+export const toJid = num => {
+	if (!num || typeof num !== 'string') num = num.toString();
+	num = num.replace(/:\d+/, '');
+	num = num.replace(/\D/g, '');
+	return jidNormalizedUser(`${num}@s.whatsapp.net`);
 };
 
 export const bufferToJSON = obj => {
 	if (Buffer.isBuffer(obj)) return { type: 'Buffer', data: Array.from(obj) };
 	if (Array.isArray(obj)) return obj.map(bufferToJSON);
 	if (obj && typeof obj === 'object') {
-		return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, bufferToJSON(value)]));
+		return Object.fromEntries(
+			Object.entries(obj).map(([key, value]) => [key, bufferToJSON(value)])
+		);
 	}
 	return obj;
 };
@@ -60,7 +68,9 @@ export const jsonToBuffer = obj => {
 	if (obj?.type === 'Buffer' && Array.isArray(obj.data)) return Buffer.from(obj.data);
 	if (Array.isArray(obj)) return obj.map(jsonToBuffer);
 	if (obj && typeof obj === 'object') {
-		return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, jsonToBuffer(value)]));
+		return Object.fromEntries(
+			Object.entries(obj).map(([key, value]) => [key, jsonToBuffer(value)])
+		);
 	}
 	return obj;
 };
@@ -73,10 +83,10 @@ export const profile = async (name, fn, logger) => {
 	return result;
 };
 
-const proxyFilePath = join('proxy.txt');
-export const getRandomProxy = async () => {
+const proxyFilePath = join('./utils/proxy.txt');
+export const proxy = async () => {
 	try {
-		const data = await fs.promises.readFile(proxyFilePath, 'utf8');
+		const data = await fs.readFile(proxyFilePath, 'utf8');
 		const proxies = data.split('\n').filter(line => line.trim() !== '');
 		if (proxies.length === 0) return null;
 		const randomIndex = Math.floor(Math.random() * proxies.length);
@@ -104,4 +114,151 @@ export function isObject(value) {
 
 export function isArray(value) {
 	return Array.isArray(value);
+}
+
+export function cleanString(inputText) {
+	const ambiguousCharacters = /[^\w\s.,!?'"()\-]/g;
+	const cleanedText = inputText.replace(ambiguousCharacters, '').replace(/\s+/g, ' ').trim();
+	return cleanedText;
+}
+
+export async function ModifyViewOnceMessage(messageId) {
+	try {
+		const msg = await loadMessage(messageId);
+		const type = getContentType(msg.message.message);
+		const content = normalizeMessageContent(
+			msg.message.message?.[type]?.contextInfo?.quotedMessage
+		);
+
+		function modifyViewOnceProperty(obj) {
+			if (typeof obj !== 'object' || obj === null) return;
+
+			for (const key in obj) {
+				if (key === 'viewOnce' && typeof obj[key] === 'boolean') {
+					obj[key] = false;
+				} else if (typeof obj[key] === 'object') {
+					modifyViewOnceProperty(obj[key]);
+				}
+			}
+		}
+
+		modifyViewOnceProperty(content);
+
+		return { message: content };
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Saves a buffer to a file in the current working directory and returns the file path.
+ *
+ * @param {Buffer} buffer - The buffer to save.
+ * @returns {Promise<string>} - The full path of the saved file.
+ */
+export const bufferFile = async buffer => {
+	const ext = await FileTypeFromBuffer(buffer);
+	const fileName = `${Date.now()}.${ext}`;
+	const filePath = join(process.cwd(), fileName);
+	await fs.writeFile(filePath, buffer);
+	return filePath;
+};
+
+export async function convertNormalMessageToViewOnce(message = {}) {
+	const typeOfMessage = getContentType(message);
+	const objectAction = message?.[typeOfMessage];
+
+	if (objectAction) {
+		const newMessage = {
+			[typeOfMessage]: {
+				...objectAction,
+				viewOnce: true
+			}
+		};
+		if (message.messageContextInfo) newMessage.messageContextInfo = message.messageContextInfo;
+		return newMessage;
+	}
+
+	return message;
+}
+
+export async function ensureContextInfoWithMentionedJid(message = {}, mentionedJidParam = []) {
+	const typeOfMessage = getContentType(message);
+	const objectAction = message?.[typeOfMessage];
+
+	if (objectAction) {
+		const newMessage = {
+			[typeOfMessage]: {
+				...objectAction,
+				contextInfo: {
+					...objectAction.contextInfo,
+					mentionedJid: objectAction.contextInfo?.mentionedJid || mentionedJidParam
+				}
+			}
+		};
+		if (typeOfMessage === 'conversation' && typeof objectAction === 'string') {
+			newMessage[typeOfMessage] = objectAction;  // Restore it to a string format
+		}
+
+		return newMessage;
+	}
+
+	return message;
+}
+
+
+export async function getFileAndSave(url) {
+	let attempts = 0;
+	let data;
+
+	while (attempts < 3) {
+		try {
+			data = await getBuffer(url);
+			data = await bufferFile(data);
+			return data;
+		} catch {
+			return false;
+		}
+	}
+}
+
+export const isPrefix = async userInput => {
+	const configValues = await getConfigValues();
+	const prefix = configValues.PREFIX || ',./^!#&$%';
+	const prefixRegex = new RegExp(
+		`^(${prefix
+			.split('')
+			.map(char => `\\${char}`)
+			.join('|')})$`
+	);
+	return !prefix || prefixRegex.test(userInput);
+};
+
+export const extractUrl = str => {
+	const match = str.match(/https?:\/\/[^\s]+/);
+	return match ? match[0] : false;
+};
+
+export const isfacebook = url => /^(https?:\/\/)?(www\.)?facebook\.com\/[A-Za-z0-9._-]+/.test(url);
+export const isInsta = url => /^(https?:\/\/)?(www\.)?instagram\.com\/[A-Za-z0-9._-]+/.test(url);
+export const isReddit = url => /^https?:\/\/(www\.)?reddit\.com\/[^\s]*$/.test(url);
+export const isTikTok = (url) => /^https?:\/\/([a-z]+\.)?tiktok\.com\/[^\s]*$/.test(url);
+export const isRumble = url => /^https?:\/\/(www\.)?rumble\.com\/[^\s]*$/.test(url);
+export function toTwitter(url) {
+	if (typeof url !== 'string') return null;
+	const regex = /^https?:\/\/x\.com\/(.+)/;
+	const match = url.match(regex);
+	if (match && match[1]) return `https://twitter.com/${match[1]}`;
+
+	return false;
+}
+export function isUrl(string) {
+	if (typeof string !== 'string') return false;
+
+	try {
+		const url = new URL(string);
+		return url.protocol === 'http:' || url.protocol === 'https:';
+	} catch (error) {
+		return false; // Invalid URL
+	}
 }

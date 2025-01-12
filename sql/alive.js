@@ -1,5 +1,5 @@
 import { DataTypes } from 'sequelize';
-import config from '#config';
+import { config } from '#config';
 import { runtime } from '#utils';
 import { DATABASE } from '#lib';
 
@@ -31,7 +31,7 @@ const AliveDB = DATABASE.define(
  */
 const getAliveMsg = async () => {
 	const msg = await AliveDB.findOne();
-	return msg?.message || `@user χѕтяσ мυℓтι ∂єνι¢є ιѕ αℓινє αи∂ α ѕιмρℓє ωнαтѕαρρ вσт мα∂є ωιтн иσ∂є נѕ\n\n*яυитιмє: &runtime*\n\n*νιѕт ωιкι ραgє тσ ¢υѕтσмιzє αℓινє мєѕѕαgє*\n\n`;
+	return msg?.message || `@user χѕтяσ мυℓтι ∂єνι¢є ιѕ αℓινє αи∂ α ѕιмρℓє ωнαтѕαρρ вσт мα∂є ωιтн иσ∂є נѕ\n\n*яυитιмє: &runtime*\n\n*νιѕт ωιкι ραgє тσ ¢υѕтσмιzє αℓινє мєѕѕαgє*\n\nhttps://github.com/AstroX11/Xstro/wiki/Alive-Message`;
 };
 
 /**
